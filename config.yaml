@@ -1,0 +1,74 @@
+# Pigeon Detection Configuration
+
+# Model Configuration
+model:
+  path: "models/pigeon_model.pth"
+  confidence_threshold: 0.7
+  device: "auto"  # "auto", "cpu", "cuda"
+
+# Stream Configuration
+stream:
+  url: "http://your-motioneye-server:8765/camera/1/stream"
+  frame_skip: 5  # Process every Nth frame
+  reconnect_attempts: 3
+  reconnect_delay: 5  # seconds
+
+# Detection Configuration
+detection:
+  cooldown_period: 30  # seconds between notifications
+  save_detections: true
+  detection_folder: "detections"
+  image_format: "jpg"
+  image_quality: 85
+
+# Input Processing
+preprocessing:
+  input_size: [416, 416]  # [width, height]
+  normalize: true
+  bgr_to_rgb: true
+
+# Notification Configuration
+notifications:
+  enabled: false
+  webhook:
+    enabled: false
+    url: "http://localhost:5000/pigeon_alert"
+    timeout: 5
+    retry_attempts: 3
+  email:
+    enabled: false
+    smtp_server: "smtp.gmail.com"
+    smtp_port: 587
+    sender_email: "your-email@gmail.com"
+    sender_password: "your-app-password"
+    recipient_email: "recipient@example.com"
+    subject_template: "Pigeon Detected! (Confidence: {confidence:.2%})"
+  pushover:
+    enabled: false
+    user_key: "your-pushover-user-key"
+    api_token: "your-pushover-api-token"
+  telegram:
+    enabled: false
+    bot_token: "your-telegram-bot-token"
+    chat_id: "your-chat-id"
+
+# Logging Configuration
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  file: "logs/pigeon_detection.log"
+  max_size: "10MB"
+  backup_count: 5
+  console_output: true
+
+# Performance Configuration
+performance:
+  max_queue_size: 10
+  processing_threads: 2
+  gpu_memory_fraction: 0.8
+
+# Advanced Options
+advanced:
+  debug_mode: false
+  save_all_frames: false
+  motion_detection_threshold: 0.1
+  enable_face_blur: false  # Privacy protection
