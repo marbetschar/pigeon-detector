@@ -23,8 +23,8 @@ detection:
 
 # Input Processing
 preprocessing:
-  input_size: [416, 416]  # [width, height]
-  normalize: true
+  input_size: [300, 300]  # [width, height]
+  normalize: false
   bgr_to_rgb: true
 
 # Notification Configuration

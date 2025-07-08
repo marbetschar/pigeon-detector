@@ -100,10 +100,10 @@ class RealTimePigeonDetector:
                 frame_rgb = frame_resized
 
             # Normalize if needed
-            # if self.preprocessing_config.normalize:
-            #     frame_normalized = frame_rgb.astype(np.float32) / 255.0
-            # else:
-            #     frame_normalized = frame_rgb.astype(np.float32)
+            if self.preprocessing_config.normalize:
+                frame_normalized = frame_rgb.astype(np.float32) / 255.0
+            else:
+                frame_normalized = frame_rgb.astype(np.float32)
 
             # Convert to tensor
             # frame_tensor = torch.FloatTensor(frame_normalized).permute(2, 0, 1).unsqueeze(0).to(self.device)
