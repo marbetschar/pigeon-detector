@@ -2,13 +2,13 @@
 
 # Model Configuration
 model:
-  path: "models/pigeon_model.pth"
+  path: "models/ssd_mobilenet_v1_quantized_300x300_coco14_sync_2018_07_18/model.tflite"
   confidence_threshold: 0.7
   device: "auto"  # "auto", "cpu", "cuda"
 
 # Stream Configuration
 stream:
-  url: "http://your-motioneye-server:8765/camera/1/stream"
+  url: "http://localhost:9081"
   frame_skip: 5  # Process every Nth frame
   reconnect_attempts: 3
   reconnect_delay: 5  # seconds

@@ -11,7 +11,10 @@ import sys
 from datetime import datetime
 from pathlib import Path
 from config_manager import ConfigManager
-# from notification_service import NotificationService
+from notification_service import NotificationService
+# from transformers import AutoImageProcessor, AutoModelForImageClassification
+from transformers.modeling_outputs import ImageClassifierOutput
+import tensorflow as tf
 
 class RealTimePigeonDetector:
     def __init__(self, config_path: str = "config.yaml"):
@@ -38,10 +41,9 @@ class RealTimePigeonDetector:
         self.detection_count = 0
 
         # Initialize notification service
-        self.notification_service = None
-        # NotificationService(
-        #     self.config_manager.get_notification_config()
-        # )
+        self.notification_service = NotificationService(
+            self.config_manager.get_notification_config()
+        )
 
         # Load model
         self.load_model()
@@ -54,31 +56,36 @@ class RealTimePigeonDetector:
 
     def load_model(self):
         """Load the pigeon detection model"""
-        pass
-        # try:
-        #     # Determine device
-        #     if self.model_config.device == "auto":
-        #         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        #     else:
-        #         self.device = torch.device(self.model_config.device)
-        #
-        #     logging.info(f"Loading model from {self.model_config.path} on device {self.device}")
-        #
-        #     # Load model
-        #     self.model = torch.load(self.model_config.path, map_location=self.device)
-        #     self.model.eval()
-        #
-        #     # Set GPU memory fraction if using CUDA
-        #     if self.device.type == 'cuda':
-        #         torch.cuda.set_per_process_memory_fraction(
-        #             self.performance_config.gpu_memory_fraction
-        #         )
-        #
-        #     logging.info("Model loaded successfully")
-        #
-        # except Exception as e:
-        #     logging.error(f"Failed to load model: {e}")
-        #     raise
+        try:
+            # Determine device
+            if self.model_config.device == "auto":
+                self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+            else:
+                self.device = torch.device(self.model_config.device)
+
+            logging.info(f"Loading model from {self.model_config.path} on device {self.device}")
+
+            # Load model
+            # self.model = torch.load(self.model_config.path, map_location=self.device)
+            # self.model.eval()
+
+            # self.model_image_processor = AutoImageProcessor.from_pretrained("trouvaille-k/FL-Invasive-Bird-Detector")
+            # self.model = AutoModelForImageClassification.from_pretrained("trouvaille-k/FL-Invasive-Bird-Detector")
+
+            self.model = tf.lite.Interpreter(model_path=self.model_config.path)
+            self.model.allocate_tensors()
+
+            # Set GPU memory fraction if using CUDA
+            if self.device.type == 'cuda':
+                torch.cuda.set_per_process_memory_fraction(
+                    self.performance_config.gpu_memory_fraction
+                )
+
+            logging.info("Model loaded successfully")
+
+        except Exception as e:
+            logging.error(f"Failed to load model: {e}")
+            raise
 
     def preprocess_frame(self, frame):
         """Preprocess frame for model input"""
@@ -93,15 +100,15 @@ class RealTimePigeonDetector:
                 frame_rgb = frame_resized
 
             # Normalize if needed
-            if self.preprocessing_config.normalize:
-                frame_normalized = frame_rgb.astype(np.float32) / 255.0
-            else:
-                frame_normalized = frame_rgb.astype(np.float32)
+            # if self.preprocessing_config.normalize:
+            #     frame_normalized = frame_rgb.astype(np.float32) / 255.0
+            # else:
+            #     frame_normalized = frame_rgb.astype(np.float32)
 
             # Convert to tensor
-            frame_tensor = torch.FloatTensor(frame_normalized).permute(2, 0, 1).unsqueeze(0).to(self.device)
+            # frame_tensor = torch.FloatTensor(frame_normalized).permute(2, 0, 1).unsqueeze(0).to(self.device)
 
-            return frame_tensor
+            return frame_rgb
 
         except Exception as e:
             logging.error(f"Frame preprocessing error: {e}")
@@ -109,30 +116,42 @@ class RealTimePigeonDetector:
 
     def detect_pigeon(self, frame):
         """Detect pigeon in frame"""
-        return False, 0.0
-        # try:
-        #     # Preprocess frame
-        #     frame_tensor = self.preprocess_frame(frame)
-        #     if frame_tensor is None:
-        #         return False, 0.0
-        #
-        #     # Run inference
-        #     with torch.no_grad():
-        #         predictions = self.model(frame_tensor)
-        #
-        #     # Process predictions
-        #     confidence = self.process_predictions(predictions)
-        #
-        #     is_pigeon = confidence > self.model_config.confidence_threshold
-        #
-        #     if self.advanced_config.debug_mode:
-        #         logging.debug(f"Detection confidence: {confidence:.4f}, threshold: {self.model_config.confidence_threshold}")
-        #
-        #     return is_pigeon, confidence
-        #
-        # except Exception as e:
-        #     logging.error(f"Detection error: {e}")
-        #     return False, 0.0
+        try:
+            # Preprocess frame
+            frame_tensor = self.preprocess_frame(frame)
+            if frame_tensor is None:
+                return False, 0.0
+
+            # frame_tensor = self.model_image_processor(frame, return_tensors="pt")
+
+            # Run inference
+            # with torch.no_grad():
+            #     predictions = self.model(**frame_tensor)
+
+            self.model.set_tensor(
+                self.model.get_input_details()[0]['index'],
+                np.expand_dims(np.array(frame_tensor, dtype=np.uint8), axis=0)
+            )
+            self.model.invoke()
+
+            output_details = self.model.get_output_details()
+            scores = self.model.get_tensor(output_details[2]['index'])[0]
+            classes = self.model.get_tensor(output_details[1]['index'])[0]
+            predictions = (scores, classes)
+
+            # Process predictions
+            confidence = self.process_predictions(predictions)
+
+            is_pigeon = confidence > self.model_config.confidence_threshold
+
+            if self.advanced_config.debug_mode:
+                logging.debug(f"Detection confidence: {confidence:.4f}, threshold: {self.model_config.confidence_threshold}")
+
+            return is_pigeon, confidence
+
+        except Exception as e:
+            logging.error(f"Detection error: {e}")
+            return False, 0.0
 
     def process_predictions(self, predictions):
         """Process model predictions"""
@@ -146,6 +165,20 @@ class RealTimePigeonDetector:
                     return torch.max(predictions).item()
                 else:
                     return predictions.item()
+            elif isinstance(predictions, ImageClassifierOutput):
+                label_id = predictions.logits.argmax(-1).item()
+                # label = self.model.config.id2label[label_id]
+                if label_id == 0:
+                    return 1.0
+                else:
+                    return 0.0
+            elif isinstance(predictions, tuple):
+                scores, classes = predictions
+                max_score = 0.0
+                for i in range(len(scores)):
+                    if int(classes[i]) == 15 and scores[i] > max_score: # 15 == bird
+                        max_score = scores[i]
+                return max_score
             else:
                 return float(predictions)
 
@@ -201,7 +234,7 @@ class RealTimePigeonDetector:
             'frame_count': self.frame_count
         }
 
-        # self.notification_service.send_notification(detection_data)
+        self.notification_service.send_notification(detection_data)
 
         logging.info(f"Pigeon detected! Confidence: {confidence:.2%}, Total detections: {self.detection_count}")
 
@@ -263,6 +296,8 @@ class RealTimePigeonDetector:
                         continue
 
                 self.frame_count += 1
+
+                # frame = cv2.imread('/Users/marbetschar/Downloads/Picture.PNG')
 
                 # Skip frames for performance
                 if self.frame_count % self.stream_config.frame_skip != 0:
