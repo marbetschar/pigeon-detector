@@ -108,7 +108,7 @@ class RealTimePigeonDetector:
             # Convert to tensor
             # frame_tensor = torch.FloatTensor(frame_normalized).permute(2, 0, 1).unsqueeze(0).to(self.device)
 
-            return frame_rgb
+            return frame_normalized
 
         except Exception as e:
             logging.error(f"Frame preprocessing error: {e}")
@@ -297,8 +297,6 @@ class RealTimePigeonDetector:
 
                 self.frame_count += 1
 
-                # frame = cv2.imread('/Users/marbetschar/Downloads/Picture.PNG')
-
                 # Skip frames for performance
                 if self.frame_count % self.stream_config.frame_skip != 0:
                     continue
@@ -395,38 +393,52 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Real-time Pigeon Detection")
     parser.add_argument("--config", default="config.yaml", help="Configuration file path")
     parser.add_argument("--daemon", action="store_true", help="Run as daemon")
+    parser.add_argument("--image", default=None, help="Single image file to run detection on")
 
     args = parser.parse_args()
 
     # Create detector
     detector = RealTimePigeonDetector(args.config)
 
-    try:
-        detector.start()
+    if args.image is not None:
+        frame = cv2.imread(args.image)
 
-        if args.daemon:
-            # Run as daemon
-            while True:
-                time.sleep(60)  # Check every minute
-                if not detector.running:
-                    break
+        # Detect pigeon
+        is_pigeon, confidence = detector.detect_pigeon(frame)
+
+        if is_pigeon:
+            detector.handle_detection(confidence, frame)
+            print(f"Pigeon detected! Confidence: {confidence:.2%}")
         else:
-            # Interactive mode
-            print("Pigeon detection started. Press 'q' to quit, 'r' to reload config, 's' for status")
-            while True:
-                user_input = input().strip().lower()
+            print(f"No pigeon detected. Confidence: {confidence:.2%}")
 
-                if user_input == 'q':
-                    break
-                elif user_input == 'r':
-                    detector.reload_config()
-                elif user_input == 's':
-                    status = detector.get_status()
-                    print(f"Status: {status}")
-                else:
-                    print("Commands: 'q' (quit), 'r' (reload config), 's' (status)")
+    else:
+        try:
+            detector.start()
 
-    except KeyboardInterrupt:
-        print("\nShutting down...")
-    finally:
-        detector.stop()
+            if args.daemon:
+                # Run as daemon
+                while True:
+                    time.sleep(60)  # Check every minute
+                    if not detector.running:
+                        break
+            else:
+                # Interactive mode
+                print("Pigeon detection started. Press 'q' to quit, 'r' to reload config, 's' for status")
+                while True:
+                    user_input = input().strip().lower()
+
+                    if user_input == 'q':
+                        break
+                    elif user_input == 'r':
+                        detector.reload_config()
+                    elif user_input == 's':
+                        status = detector.get_status()
+                        print(f"Status: {status}")
+                    else:
+                        print("Commands: 'q' (quit), 'r' (reload config), 's' (status)")
+
+        except KeyboardInterrupt:
+            print("\nShutting down...")
+        finally:
+            detector.stop()
