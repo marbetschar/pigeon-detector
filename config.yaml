@@ -2,8 +2,8 @@
 
 # Model Configuration
 model:
-  path: "models/ssd_mobilenet_v1_quantized_300x300_coco14_sync_2018_07_18/model.tflite"
-  confidence_threshold: 0.7
+  path: "models/ssd_mobilenet_v1.hef"
+  confidence_threshold: 0.33
   device: "auto"  # "auto", "cpu", "cuda"
 
 # Stream Configuration

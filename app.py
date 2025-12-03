@@ -174,6 +174,7 @@ class RealTimePigeonDetector:
                     return 0.0
             elif isinstance(predictions, tuple):
                 scores, classes = predictions
+                print(classes)
                 max_score = 0.0
                 for i in range(len(scores)):
                     if int(classes[i]) == 15 and scores[i] > max_score: # 15 == bird
@@ -237,6 +238,10 @@ class RealTimePigeonDetector:
         self.notification_service.send_notification(detection_data)
 
         logging.info(f"Pigeon detected! Confidence: {confidence:.2%}, Total detections: {self.detection_count}")
+c = np.array((2, 2))
+for i in range(3):
+    for j in range(4):
+        c[i][j] = a[i][j]*b[j]
 
     def connect_to_stream(self):
         """Connect to video stream with retry logic"""
