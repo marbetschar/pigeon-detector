@@ -32,24 +32,26 @@ class PigeonBBoxDataset(Dataset):
         #   "filename": "2025-07-08_07-39-49.jpg",
         #   "regions": [ { "shape_attributes": { "x": ..., "y": ..., "width": ..., "height": ... } } ]
         # }
+        na_bbox = [0, 0, 0, 0, 0]
+
         for _, entry in annotations.items():
             filename = entry.get("filename")
             regions = entry.get("regions", [])
 
+            bbox = na_bbox
+
             # Skip if no regions
-            if not regions:
-                continue
+            if regions:
+                # Use the first region only
+                shape = regions[0].get("shape_attributes", {})
+                x = shape.get("x")
+                y = shape.get("y")
+                w = shape.get("width")
+                h = shape.get("height")
 
-            # Use the first region only
-            shape = regions[0].get("shape_attributes", {})
-            x = shape.get("x")
-            y = shape.get("y")
-            w = shape.get("width")
-            h = shape.get("height")
-
-            # Skip if any coordinate is missing
-            if None in (x, y, w, h):
-                continue
+                # Skip if any coordinate is missing
+                if None not in (x, y, w, h):
+                    bbox = [1, x, y, w, h]
 
             img_path = os.path.join(images_root, filename)
 
@@ -60,7 +62,7 @@ class PigeonBBoxDataset(Dataset):
             self.samples.append(
                 {
                     "img_path": img_path,
-                    "bbox": [x, y, w, h],
+                    "bbox": bbox
                 }
             )
 
@@ -84,9 +86,10 @@ class PigeonBBoxDataset(Dataset):
         bbox = torch.tensor(bbox, dtype=torch.float32)
 
         if self.normalize_bboxes:
-            x, y, w, h = bbox
+            prob, x, y, w, h = bbox
             bbox = torch.tensor(
                 [
+                    prob,
                     x / orig_width,
                     y / orig_height,
                     w / orig_width,
