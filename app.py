@@ -2,7 +2,6 @@ import os
 
 import cv2
 import numpy as np
-import torch
 import threading
 import time
 import logging
@@ -12,9 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from config_manager import ConfigManager
 from notification_service import NotificationService
-# from transformers import AutoImageProcessor, AutoModelForImageClassification
-from transformers.modeling_outputs import ImageClassifierOutput
-import tensorflow as tf
+from hailo import HailoHEFModel
 
 class RealTimePigeonDetector:
     def __init__(self, config_path: str = "config.yaml"):
@@ -57,30 +54,7 @@ class RealTimePigeonDetector:
     def load_model(self):
         """Load the pigeon detection model"""
         try:
-            # Determine device
-            if self.model_config.device == "auto":
-                self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-            else:
-                self.device = torch.device(self.model_config.device)
-
-            logging.info(f"Loading model from {self.model_config.path} on device {self.device}")
-
-            # Load model
-            # self.model = torch.load(self.model_config.path, map_location=self.device)
-            # self.model.eval()
-
-            # self.model_image_processor = AutoImageProcessor.from_pretrained("trouvaille-k/FL-Invasive-Bird-Detector")
-            # self.model = AutoModelForImageClassification.from_pretrained("trouvaille-k/FL-Invasive-Bird-Detector")
-
-            self.model = tf.lite.Interpreter(model_path=self.model_config.path)
-            self.model.allocate_tensors()
-
-            # Set GPU memory fraction if using CUDA
-            if self.device.type == 'cuda':
-                torch.cuda.set_per_process_memory_fraction(
-                    self.performance_config.gpu_memory_fraction
-                )
-
+            self.model = HailoHEFModel("models/mobilenet_v2.hef")
             logging.info("Model loaded successfully")
 
         except Exception as e:
@@ -105,9 +79,6 @@ class RealTimePigeonDetector:
             else:
                 frame_normalized = frame_rgb.astype(np.float32)
 
-            # Convert to tensor
-            # frame_tensor = torch.FloatTensor(frame_normalized).permute(2, 0, 1).unsqueeze(0).to(self.device)
-
             return frame_normalized
 
         except Exception as e:
@@ -118,40 +89,21 @@ class RealTimePigeonDetector:
         """Detect pigeon in frame"""
         try:
             # Preprocess frame
-            frame_tensor = self.preprocess_frame(frame)
-            if frame_tensor is None:
+            frame_preprocessed = self.preprocess_frame(frame)
+            if frame_preprocessed is None:
                 return False, 0.0
 
-            # frame_tensor = self.model_image_processor(frame, return_tensors="pt")
-
-            # Run inference
-            # with torch.no_grad():
-            #     predictions = self.model(**frame_tensor)
-
-            self.model.set_tensor(
-                self.model.get_input_details()[0]['index'],
-                np.expand_dims(np.array(frame_tensor, dtype=np.uint8), axis=0)
-            )
-            self.model.invoke()
-
-            output_details = self.model.get_output_details()
-            scores = self.model.get_tensor(output_details[2]['index'])[0]
-            classes = self.model.get_tensor(output_details[1]['index'])[0]
-            predictions = (scores, classes)
-
-            # Process predictions
-            confidence = self.process_predictions(predictions)
-
+            confidence, x, y, width, height = self.model.predict(frame_preprocessed)
             is_pigeon = confidence > self.model_config.confidence_threshold
 
             if self.advanced_config.debug_mode:
                 logging.debug(f"Detection confidence: {confidence:.4f}, threshold: {self.model_config.confidence_threshold}")
 
-            return is_pigeon, confidence
+            return is_pigeon, confidence, x, y, width, height
 
         except Exception as e:
             logging.error(f"Detection error: {e}")
-            return False, 0.0
+            return False, 0.0, 0, 0, 0, 0
 
     def process_predictions(self, predictions):
         """Process model predictions"""
@@ -187,7 +139,7 @@ class RealTimePigeonDetector:
             logging.error(f"Prediction processing error: {e}")
             return 0.0
 
-    def save_detection_image(self, frame, confidence):
+    def save_detection_image(self, frame, confidence, x, y, width, height):
         """Save detection image to disk"""
         try:
             if not self.detection_config.save_detections:
@@ -210,7 +162,7 @@ class RealTimePigeonDetector:
             logging.error(f"Error saving detection image: {e}")
             return None
 
-    def handle_detection(self, confidence, frame):
+    def handle_detection(self, frame, confidence, x, y, width, height):
         """Handle pigeon detection"""
         current_time = time.time()
 
@@ -224,7 +176,7 @@ class RealTimePigeonDetector:
         self.detection_count += 1
 
         # Save detection image
-        image_path = self.save_detection_image(frame, confidence)
+        image_path = self.save_detection_image(frame, confidence, x, y, width, height)
 
         # Send notifications
         detection_data = {
@@ -238,10 +190,6 @@ class RealTimePigeonDetector:
         self.notification_service.send_notification(detection_data)
 
         logging.info(f"Pigeon detected! Confidence: {confidence:.2%}, Total detections: {self.detection_count}")
-c = np.array((2, 2))
-for i in range(3):
-    for j in range(4):
-        c[i][j] = a[i][j]*b[j]
 
     def connect_to_stream(self):
         """Connect to video stream with retry logic"""
@@ -313,10 +261,10 @@ for i in range(3):
                     cv2.imwrite(debug_path, frame)
 
                 # Detect pigeon
-                is_pigeon, confidence = self.detect_pigeon(frame)
+                is_pigeon, confidence, x, y, width, height = self.detect_pigeon(frame)
 
                 if is_pigeon:
-                    self.handle_detection(confidence, frame)
+                    self.handle_detection(frame, confidence, x, y, width, height)
 
                 # Log progress periodically
                 if self.frame_count % 1000 == 0:
@@ -409,10 +357,10 @@ if __name__ == "__main__":
         frame = cv2.imread(args.image)
 
         # Detect pigeon
-        is_pigeon, confidence = detector.detect_pigeon(frame)
+        is_pigeon, confidence, x, y, width, height = detector.detect_pigeon(frame)
 
         if is_pigeon:
-            detector.handle_detection(confidence, frame)
+            detector.handle_detection(frame, confidence, x, y, width, height)
             print(f"Pigeon detected! Confidence: {confidence:.2%}")
         else:
             print(f"No pigeon detected. Confidence: {confidence:.2%}")

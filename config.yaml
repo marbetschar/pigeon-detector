@@ -23,7 +23,7 @@ detection:
 
 # Input Processing
 preprocessing:
-  input_size: [300, 300]  # [width, height]
+  input_size: [224, 224]  # [width, height]
   normalize: false
   bgr_to_rgb: true
 
