@@ -41,10 +41,12 @@ class HailoHEFModel():
         # Create input and output virtual streams params
         # Quantized argument signifies whether or not the incoming data is already quantized.
         # Data is quantized by HailoRT if and only if quantized == False .
-        self.input_vstreams_params = InputVStreamParams.make(self.network_group, quantized=False, format_type=FormatType.UINT8)
+        self.input_vstreams_params = InputVStreamParams.make(self.network_group, quantized=False, format_type=FormatType.FLOAT32)
         self.output_vstreams_params = OutputVStreamParams.make(self.network_group, quantized=False, format_type=FormatType.FLOAT32)
 
     def predict(self, x):
+        assert x.shape == (3, 224, 224)
+
         input_data = { self.input_vstream_info.name: np.array([x]) }
 
         y = None
@@ -58,7 +60,20 @@ class HailoHEFModel():
 if __name__ == "__main__":
     model = HailoHEFModel("models/mobilenet_v2.hef")
 
-    image = cv2.imread("dataset/images/2025-07-08_07-39-50.jpg")
+    IMAGENET_MEAN = np.array([0.485, 0.456, 0.406]).reshape(3, 1, 1)
+    IMAGENET_STD = np.array([0.229, 0.224, 0.225]).reshape(3, 1, 1)
+
+    image = cv2.imread("dataset/images/2025-07-08_08-22-36.jpg")
+    image_height, image_width = image.shape[:2]
+
     image_resized = cv2.resize(image, [224, 224])
-    y = model.predict(image_resized)
-    print(y)
+    image_rgb = cv2.cvtColor(image_resized, cv2.COLOR_BGR2RGB)
+    image_chw = np.transpose(image_rgb, (2, 0, 1))
+    image_norm = ((image_chw / 255.0) - IMAGENET_MEAN) / IMAGENET_STD
+    
+    confidence, x_norm, y_norm, w_norm, h_norm = model.predict(image_norm.astype(np.float32))
+    x = x_norm * image_width
+    y = y_norm * image_height
+    w = w_norm * image_width
+    h = h_norm * image_height
+    print([confidence, x, y, w, h])
