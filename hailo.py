@@ -45,9 +45,10 @@ class HailoHEFModel():
         self.output_vstreams_params = OutputVStreamParams.make(self.network_group, quantized=False, format_type=FormatType.FLOAT32)
 
     def predict(self, x):
-        assert x.shape == (3, 224, 224)
+        assert x.shape == (224, 224, 3)
 
-        input_data = { self.input_vstream_info.name: np.array([x]) }
+        batch = np.expand_dims(x, axis=0).astype(np.float32)
+        input_data = { self.input_vstream_info.name: batch }
 
         y = None
         with InferVStreams(self.network_group, self.input_vstreams_params, self.output_vstreams_params) as infer_pipeline:
@@ -68,8 +69,7 @@ if __name__ == "__main__":
 
     image_resized = cv2.resize(image, [224, 224])
     image_rgb = cv2.cvtColor(image_resized, cv2.COLOR_BGR2RGB)
-    image_chw = np.transpose(image_rgb, (2, 0, 1))
-    image_norm = ((image_chw / 255.0) - IMAGENET_MEAN) / IMAGENET_STD
+    image_norm = ((image_rgb.astype(np.float32) / 255.0) - IMAGENET_MEAN) / IMAGENET_STD
     
     confidence, x_norm, y_norm, w_norm, h_norm = model.predict(image_norm.astype(np.float32))
     x = x_norm * image_width
