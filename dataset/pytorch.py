@@ -1,5 +1,6 @@
 import json
 import os
+import random
 from PIL import Image
 
 import torch
@@ -32,39 +33,69 @@ class PigeonBBoxDataset(Dataset):
         #   "filename": "2025-07-08_07-39-49.jpg",
         #   "regions": [ { "shape_attributes": { "x": ..., "y": ..., "width": ..., "height": ... } } ]
         # }
-        na_bbox = [0, 0, 0, 0, 0]
 
         for _, entry in annotations.items():
             filename = entry.get("filename")
             regions = entry.get("regions", [])
 
-            bbox = na_bbox
+            if not regions:
+                continue
 
-            # Skip if no regions
-            if regions:
-                # Use the first region only
-                shape = regions[0].get("shape_attributes", {})
+            img_path = os.path.join(images_root, filename)
+            if not os.path.isfile(img_path):
+                continue
+
+            # Collect ALL valid regions for this image
+            bboxes = []
+            for region in regions:
+                shape = region.get("shape_attributes", {})
                 x = shape.get("x")
                 y = shape.get("y")
                 w = shape.get("width")
                 h = shape.get("height")
 
-                # Skip if any coordinate is missing
-                if None not in (x, y, w, h):
-                    bbox = [1, x, y, w, h]
+                if None in (x, y, w, h):
+                    continue
 
-            img_path = os.path.join(images_root, filename)
+                bboxes.append([1, x, y, w, h])
 
-            # Optionally skip if the file does not actually exist
-            if not os.path.isfile(img_path):
+            # Skip images with no valid regions
+            if not bboxes:
                 continue
 
             self.samples.append(
                 {
                     "img_path": img_path,
-                    "bbox": bbox
+                    "bboxes": bboxes,  # list of [x, y, w, h]
                 }
             )
+
+            # # Skip if no regions
+            # if regions:
+            #     # Select region at random:
+            #
+            #     shape = regions[0].get("shape_attributes", {})
+            #     x = shape.get("x")
+            #     y = shape.get("y")
+            #     w = shape.get("width")
+            #     h = shape.get("height")
+            #
+            #     # Skip if any coordinate is missing
+            #     if None not in (x, y, w, h):
+            #         bbox = [1, x, y, w, h]
+            #
+            # img_path = os.path.join(images_root, filename)
+            #
+            # # Optionally skip if the file does not actually exist
+            # if not os.path.isfile(img_path):
+            #     continue
+            #
+            # self.samples.append(
+            #     {
+            #         "img_path": img_path,
+            #         "bbox": bbox
+            #     }
+            # )
 
     def __len__(self):
         return len(self.samples)
@@ -72,17 +103,23 @@ class PigeonBBoxDataset(Dataset):
     def __getitem__(self, idx):
         sample = self.samples[idx]
         img_path = sample["img_path"]
-        bbox = sample["bbox"]
+        bboxes = sample["bboxes"]  # list of bboxes for this image
 
         # Load image
         image = Image.open(img_path).convert("RGB")
         orig_width, orig_height = image.size
 
+        if not bboxes:
+            return image, torch.tensor([0, 0, 0, 0, 0], dtype=torch.float32)
+
+        # Pick ONE region at random for this sample
+        bbox = random.choice(bboxes)  # [confidence, x, y, w, h] in pixels (original image)
+
         # Apply transforms
         if self.transform is not None:
             image = self.transform(image)
 
-        # Convert bbox to tensor [x, y, w, h]
+        # Convert bbox to tensor [confidence, x, y, w, h]
         bbox = torch.tensor(bbox, dtype=torch.float32)
 
         if self.normalize_bboxes:
