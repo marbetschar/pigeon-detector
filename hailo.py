@@ -61,8 +61,8 @@ class HailoHEFModel():
 if __name__ == "__main__":
     model = HailoHEFModel("models/mobilenet_v2.hef")
 
-    IMAGENET_MEAN = np.array([0.485, 0.456, 0.406]).reshape(3, 1, 1)
-    IMAGENET_STD = np.array([0.229, 0.224, 0.225]).reshape(3, 1, 1)
+    IMAGENET_MEAN = np.array([0.485, 0.456, 0.406]).reshape(1, 1, 3)
+    IMAGENET_STD = np.array([0.229, 0.224, 0.225]).reshape(1, 1, 3)
 
     image = cv2.imread("dataset/images/2025-07-08_08-22-36.jpg")
     image_height, image_width = image.shape[:2]
@@ -71,7 +71,9 @@ if __name__ == "__main__":
     image_rgb = cv2.cvtColor(image_resized, cv2.COLOR_BGR2RGB)
     image_norm = ((image_rgb.astype(np.float32) / 255.0) - IMAGENET_MEAN) / IMAGENET_STD
     
-    confidence, x_norm, y_norm, w_norm, h_norm = model.predict(image_norm.astype(np.float32))
+    pred = model.predict(image_norm)
+
+    confidence, x_norm, y_norm, w_norm, h_norm = pred
     x = x_norm * image_width
     y = y_norm * image_height
     w = w_norm * image_width
