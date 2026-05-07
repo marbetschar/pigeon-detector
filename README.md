@@ -1,4 +1,8 @@
-# pigeon-detector
+# Pigeon Detector
+
+> [!WARNING]
+> This repository has been archived in favor of https://github.com/Pigeon-Guard/app.
+
 Detecting Pigeons in Images using Machine Learning
 
 ## Run detection on single image
